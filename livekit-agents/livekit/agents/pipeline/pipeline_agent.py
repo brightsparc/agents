@@ -145,6 +145,10 @@ class AgentTranscriptionOptions:
     hyphenate_word: Callable[[str], list[str]] = tokenize.basic.hyphenate_word
     """A function that takes a string (word) as input and returns a list of strings,
     representing the hyphenated parts of the word."""
+    min_confidence: float = 0.0
+    """Minimum confidence for the transcript to be considered valid"""
+    min_duration: float = 0.0
+    """Minimum duration for the transcript to be considered valid"""
 
 
 class VoicePipelineAgent(utils.EventEmitter[EventTypes]):
@@ -510,11 +514,35 @@ class VoicePipelineAgent(utils.EventEmitter[EventTypes]):
         def _on_final_transcript(ev: stt.SpeechEvent) -> None:
             new_transcript = ev.alternatives[0].text
             if not new_transcript:
+                logger.debug("skip empty transcript")
+                return
+            confidence = (
+                sum([a.confidence for a in ev.alternatives]) /
+                len(ev.alternatives)
+            )
+            if confidence < self._opts.transcription.min_confidence:
+                logger.debug(
+                    "skip low confidence transcript",
+                    extra={"transcript": new_transcript,
+                           "confidence": confidence}
+                )
+                return
+            duration = (
+                ev.alternatives[0].end_time - ev.alternatives[0].start_time
+            )
+            if duration < self._opts.transcription.min_duration:
+                logger.debug(
+                    "skip short transcript",
+                    extra={"transcript": new_transcript,
+                           "duration": duration}
+                )
                 return
 
             logger.debug(
                 "received user transcript",
-                extra={"user_transcript": new_transcript},
+                extra={"user_transcript": new_transcript,
+                       "confidence": confidence,
+                       "duration": duration}
             )
 
             self._last_final_transcript_time = time.perf_counter()

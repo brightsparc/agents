@@ -414,11 +414,18 @@ def _streaming_recognize_response_to_speech_data(
 ) -> stt.SpeechData | None:
     text = ""
     confidence = 0.0
+    start_time = 0.0
+    end_time = 0.0
     for result in resp.results:
         if len(result.alternatives) == 0:
             continue
         text += result.alternatives[0].transcript
         confidence += result.alternatives[0].confidence
+        # Get word offsets if enable_word_time_offsets=True
+        for word in result.alternatives[0].words:
+            if start_time == 0.0:
+                start_time = word.start_offset.total_seconds()
+            end_time = word.end_offset.total_seconds()
 
     confidence /= len(resp.results)
     lg = resp.results[0].language_code
@@ -427,7 +434,11 @@ def _streaming_recognize_response_to_speech_data(
         return None
 
     data = stt.SpeechData(
-        language=lg, start_time=0, end_time=0, confidence=confidence, text=text
+        language=lg,
+        start_time=start_time,
+        end_time=end_time,
+        confidence=confidence,
+        text=text,
     )
 
     return data
